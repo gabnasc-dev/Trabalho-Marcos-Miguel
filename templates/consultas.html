@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consultas CQL — Estoque Cassandra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">⬡</span>
+        <span class="brand-name">Estoque<span class="brand-accent">DB</span></span>
+      </div>
+      <nav class="sidebar-nav">
+        <span class="nav-section-label">Principal</span>
+        <a href="/" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="7" height="7" rx="1"/><rect x="11" y="2" width="7" height="7" rx="1"/><rect x="2" y="11" width="7" height="7" rx="1"/><rect x="11" y="11" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </a>
+        <a href="/produtos" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h14l-1.5 9H4.5L3 3z"/><circle cx="8" cy="17" r="1"/><circle cx="14" cy="17" r="1"/></svg>
+          Produtos
+        </a>
+        <a href="/movimentacoes" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10h12M13 6l4 4-4 4M7 6L3 10l4 4"/></svg>
+          Movimentações
+        </a>
+        <a href="/fornecedores" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3.314 2.686-6 6-6s6 2.686 6 6"/></svg>
+          Fornecedores
+        </a>
+        <span class="nav-section-label" style="margin-top:16px">Analytics</span>
+        <a href="/consultas" class="nav-item active">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 17l4-6 4 3 4-7"/><circle cx="17" cy="7" r="1"/></svg>
+          Consultas CQL
+        </a>
+      </nav>
+      <div class="sidebar-footer">Apache Cassandra 4.1</div>
+    </aside>
+
+    <main class="main">
+      <header class="page-header">
+        <div>
+          <h1 class="page-title">Consultas CQL</h1>
+          <p class="page-subtitle">Demonstração dos conceitos NoSQL com equivalentes MongoDB</p>
+        </div>
+      </header>
+
+      <section class="query-section">
+        <div class="query-header">
+          <div class="query-number">01</div>
+          <div>
+            <h2 class="query-title">Agrupamento por Categoria</h2>
+            <p class="query-subtitle">Conceito: GROUP BY + COUNT/SUM — agregação no cliente</p>
+          </div>
+          <div class="query-badges">
+            <span class="badge badge-brand">CQL</span>
+            <span class="badge badge-neutral">$group</span>
+          </div>
+        </div>
+
+        <div class="query-code-block">
+          <div class="code-label">CQL (Cassandra)</div>
+          <pre class="code-pre">SELECT produto_id, nome, categoria_nome, preco FROM produtos;</pre>
+        </div>
+        <div class="query-code-block">
+          <div class="code-label">MongoDB equiv</div>
+          <pre class="code-pre">db.produtos.aggregate([
+  { $group: { _id: "$categoria_nome",
+      total_produtos: { $sum: 1 },
+      valor_total: { $sum: "$preco" } }},
+  { $sort: { total_produtos: -1 } }
+])</pre>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <table class="table">
+            <thead>
+              <tr><th>Categoria</th><th>Total de Produtos</th><th>Valor Total (R$)</th></tr>
+            </thead>
+            <tbody>
+              {% for g in por_categoria %}
+              <tr>
+                <td><span class="cell-primary">{{ g.categoria }}</span></td>
+                <td>{{ g.total_produtos }}</td>
+                <td>R$ {{ "%.2f"|format(g.valor_total) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3" class="empty-state">Sem dados.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="query-section">
+        <div class="query-header">
+          <div class="query-number">02</div>
+          <div>
+            <h2 class="query-title">Estoque Crítico por Armazém</h2>
+            <p class="query-subtitle">Conceito: $lookup simulado — desnormalização + multi-partition scan</p>
+          </div>
+          <div class="query-badges">
+            <span class="badge badge-brand">CQL</span>
+            <span class="badge badge-neutral">$lookup</span>
+            <span class="badge badge-neutral">$match</span>
+          </div>
+        </div>
+
+        <div class="query-code-block">
+          <div class="code-label">CQL (Cassandra)</div>
+          <pre class="code-pre">SELECT produto_nome, quantidade, status
+FROM estoque_por_armazem
+WHERE armazem_id = ?;</pre>
+        </div>
+        <div class="query-code-block">
+          <div class="code-label">MongoDB equiv</div>
+          <pre class="code-pre">db.estoque.aggregate([
+  { $match: { status: { $in: ["CRITICO","ZERADO"] } } },
+  { $lookup: { from:"armazens", localField:"armazem_id",
+               foreignField:"_id", as:"armazem" } },
+  { $group: { _id:"$armazem_id",
+      armazem: { $first:"$armazem.nome" },
+      itens: { $push: "$$ROOT" } } }
+])</pre>
+        </div>
+
+        {% for arm in estoque_critico %}
+        <div class="card" style="margin-top:12px">
+          <div class="card-header">
+            <h3 class="card-title">{{ arm.armazem_nome }}</h3>
+            <span class="badge badge-error">{{ arm.total_critico }} item(ns) crítico(s)</span>
+          </div>
+          <table class="table">
+            <thead><tr><th>Produto</th><th>SKU</th><th>Qtd</th><th>Mín.</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for item in arm.itens_criticos %}
+              <tr>
+                <td>{{ item.produto_nome }}</td>
+                <td><code class="code-tag">{{ item.sku }}</code></td>
+                <td>{{ item.quantidade }}</td>
+                <td>{{ item.quantidade_minima }}</td>
+                <td>
+                  {% if item.status == "ZERADO" %}
+                    <span class="badge badge-muted">Zerado</span>
+                  {% else %}
+                    <span class="badge badge-error">Crítico</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="card" style="margin-top:12px">
+          <p class="empty-state">Nenhum item crítico encontrado.</p>
+        </div>
+        {% endfor %}
+      </section>
+
+      <section class="query-section">
+        <div class="query-header">
+          <div class="query-number">03</div>
+          <div>
+            <h2 class="query-title">Histórico de Movimentações com Projeção</h2>
+            <p class="query-subtitle">Conceito: clustering ORDER BY + projeção + ALLOW FILTERING</p>
+          </div>
+          <div class="query-badges">
+            <span class="badge badge-brand">CQL</span>
+            <span class="badge badge-neutral">$project</span>
+            <span class="badge badge-neutral">sort()</span>
+          </div>
+        </div>
+
+        <div class="query-code-block">
+          <div class="code-label">CQL (Cassandra)</div>
+          <pre class="code-pre">SELECT tipo, quantidade, quantidade_anterior, quantidade_posterior,
+       armazem_nome, responsavel, criado_em
+FROM movimentacoes_por_produto
+WHERE produto_id = ?
+  AND tipo = ?</pre>
+        </div>
+        <div class="query-code-block">
+          <div class="code-label">MongoDB equiv</div>
+          <pre class="code-pre">db.movimentacoes.find(
+  { produto_id: ObjectId("..."), tipo: "ENTRADA" },
+  { tipo:1, quantidade:1, quantidade_anterior:1,
+    quantidade_posterior:1, responsavel:1, criado_em:1 }
+).sort({ criado_em: -1 })</pre>
+        </div>
+
+        <div class="filter-bar" style="margin-top:12px">
+          <label class="form-label" style="margin:0;align-self:center">Produto:</label>
+          <select id="sel-produto-mov" class="input" style="width:280px">
+            {% for p in produtos %}
+              <option value="{{ p.produto_id }}">{{ p.nome }}</option>
+            {% endfor %}
+          </select>
+          <select id="sel-tipo-mov" class="input" style="width:140px">
+            <option value="">Todos</option>
+            <option value="ENTRADA">Entrada</option>
+            <option value="SAIDA">Saída</option>
+          </select>
+          <button class="btn btn-primary" onclick="carregarMov()">Consultar</button>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <table class="table" id="tabela-mov-historico">
+            <thead><tr><th>Tipo</th><th>Qtd</th><th>Ant. → Pos.</th><th>Armazém</th><th>Responsável</th><th>Observação</th><th>Data</th></tr></thead>
+            <tbody>
+              {% for m in mov_historico %}
+              <tr>
+                <td>
+                  {% if m.tipo == "ENTRADA" %}
+                    <span class="badge badge-success">Entrada</span>
+                  {% else %}
+                    <span class="badge badge-error">Saída</span>
+                  {% endif %}
+                </td>
+                <td>{{ m.quantidade }}</td>
+                <td class="text-muted">{{ m.quantidade_anterior }} → {{ m.quantidade_posterior }}</td>
+                <td>{{ m.armazem_nome }}</td>
+                <td>{{ m.responsavel }}</td>
+                <td class="text-muted">{{ m.observacao or "—" }}</td>
+                <td class="text-muted">{{ (m.criado_em or "")[:10] }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="empty-state">Selecione um produto acima.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="query-section">
+        <div class="query-header">
+          <div class="query-number">04</div>
+          <div>
+            <h2 class="query-title">Expansão de MAP — Atributos do Produto</h2>
+            <p class="query-subtitle">Conceito: map&lt;text,text&gt; como subdocumento dinâmico ($unwind + $objectToArray)</p>
+          </div>
+          <div class="query-badges">
+            <span class="badge badge-brand">CQL MAP</span>
+            <span class="badge badge-neutral">$unwind</span>
+          </div>
+        </div>
+
+        <div class="query-code-block">
+          <div class="code-label">CQL (Cassandra)</div>
+          <pre class="code-pre">SELECT nome, sku, atributos, tags
+FROM produtos WHERE produto_id = ?;</pre>
+        </div>
+        <div class="query-code-block">
+          <div class="code-label">MongoDB equiv</div>
+          <pre class="code-pre">db.produtos.aggregate([
+  { $match: { _id: ObjectId("...") } },
+  { $addFields: {
+      atributos_array: { $objectToArray: "$atributos" }
+    }
+  }
+])</pre>
+        </div>
+
+        <div class="filter-bar" style="margin-top:12px">
+          <label class="form-label" style="margin:0;align-self:center">Produto:</label>
+          <select id="sel-produto-attr" class="input" style="width:280px">
+            {% for p in produtos %}
+              <option value="{{ p.produto_id }}">{{ p.nome }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-primary" onclick="carregarAtributos()">Ver Atributos</button>
+        </div>
+
+        {% if atributos_expandidos %}
+        <div class="card" style="margin-top:12px" id="card-atributos">
+          <div class="card-header">
+            <h3 class="card-title">{{ atributos_expandidos.nome }}</h3>
+            <code class="code-tag">{{ atributos_expandidos.sku }}</code>
+          </div>
+          <div class="attr-layout">
+            <div>
+              <div class="form-section-label">Tags <span class="tag-hint">(list&lt;text&gt;)</span></div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+                {% for tag in atributos_expandidos.tags %}
+                  <span class="badge badge-brand-soft">{{ tag }}</span>
+                {% endfor %}
+              </div>
+            </div>
+            <div>
+              <div class="form-section-label">Atributos <span class="tag-hint">(map&lt;text,text&gt; expandido)</span></div>
+              <table class="table" style="margin-top:6px">
+                <thead><tr><th>Chave</th><th>Valor</th></tr></thead>
+                <tbody>
+                  {% for a in atributos_expandidos.atributos %}
+                  <tr><td>{{ a.chave }}</td><td>{{ a.valor }}</td></tr>
+                  {% else %}
+                  <tr><td colspan="2" class="empty-state">Sem atributos.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        <div id="card-atributos-dynamic" style="margin-top:12px"></div>
+      </section>
+
+      <section class="query-section">
+        <div class="query-header">
+          <div class="query-number">05</div>
+          <div>
+            <h2 class="query-title">UDT — Subdocumento de Endereço</h2>
+            <p class="query-subtitle">Conceito: frozen&lt;endereco&gt; como subdocumento embutido (embedded doc)</p>
+          </div>
+          <div class="query-badges">
+            <span class="badge badge-brand">UDT</span>
+            <span class="badge badge-neutral">embedded doc</span>
+          </div>
+        </div>
+        <div class="query-code-block">
+          <div class="code-label">CQL (Cassandra)</div>
+          <pre class="code-pre">CREATE TYPE estoque.endereco (
+    logradouro text, numero text, complemento text,
+    bairro text, cidade text, estado text, cep text
+);
+
+CREATE TABLE fornecedores (
+    fornecedor_id uuid PRIMARY KEY,
+    nome          text,
+    telefones     list&lt;text&gt;,
+    endereco      frozen&lt;endereco&gt;
+);
+
+SELECT endereco.cidade, endereco.estado FROM fornecedores;</pre>
+        </div>
+        <div class="query-code-block">
+          <div class="code-label">MongoDB equiv</div>
+          <pre class="code-pre">db.fornecedores.insertOne({
+  nome: "Fornecedor X",
+  endereco: { logradouro: "Rua Y", numero: "10", cidade: "SP" }
+});
+db.fornecedores.find({ "endereco.cidade": "São Paulo" })</pre>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <p class="query-note">
+            O UDT <code>frozen&lt;endereco&gt;</code> é equivalente a um subdocumento embutido no MongoDB.
+            A diferença é que no Cassandra o UDT <strong>frozen</strong> é serializado como blob — qualquer
+            atualização reescreve o campo inteiro. Isso é análogo a <code>$set: { endereco: {...} }</code>
+            no MongoDB (substituição do objeto completo). Para atualizações granulares por campo,
+            seria necessário usar o UDT <em>sem</em> frozen (disponível em Cassandra 3.6+), que
+            permite <code>UPDATE … SET endereco.cidade = 'Campinas'</code>.
+          </p>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="card-header">
+            <h3 class="card-title">Fornecedores — endereco (UDT)</h3>
+          </div>
+          <table class="table">
+            <thead><tr><th>Nome</th><th>Logradouro</th><th>Número</th><th>Bairro</th><th>Cidade</th><th>Estado</th><th>CEP</th></tr></thead>
+            <tbody>
+              {% for f in fornecedores %}
+              <tr>
+                <td><span class="cell-primary">{{ f.nome }}</span></td>
+                <td>{{ f.endereco.logradouro if f.endereco else '—' }}</td>
+                <td>{{ f.endereco.numero if f.endereco else '—' }}</td>
+                <td>{{ f.endereco.bairro if f.endereco else '—' }}</td>
+                <td>{{ f.endereco.cidade if f.endereco else '—' }}</td>
+                <td>{{ f.endereco.estado if f.endereco else '—' }}</td>
+                <td>{{ f.endereco.cep if f.endereco else '—' }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="empty-state">Sem dados.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="card-header">
+            <h3 class="card-title">Armazéns — endereco (UDT)</h3>
+          </div>
+          <table class="table">
+            <thead><tr><th>Nome</th><th>Logradouro</th><th>Número</th><th>Bairro</th><th>Cidade</th><th>Estado</th><th>CEP</th></tr></thead>
+            <tbody>
+              {% for a in armazens %}
+              <tr>
+                <td><span class="cell-primary">{{ a.nome }}</span></td>
+                <td>{{ a.endereco.logradouro if a.endereco else '—' }}</td>
+                <td>{{ a.endereco.numero if a.endereco else '—' }}</td>
+                <td>{{ a.endereco.bairro if a.endereco else '—' }}</td>
+                <td>{{ a.endereco.cidade if a.endereco else '—' }}</td>
+                <td>{{ a.endereco.estado if a.endereco else '—' }}</td>
+                <td>{{ a.endereco.cep if a.endereco else '—' }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="empty-state">Sem dados.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    function carregarMov() {
+      const pid  = document.getElementById('sel-produto-mov').value;
+      const tipo = document.getElementById('sel-tipo-mov').value;
+      fetch('/api/consultas/movimentacoes/' + pid + (tipo ? '?tipo=' + tipo : ''))
+        .then(r => r.json())
+        .then(data => {
+          const tbody = document.querySelector('#tabela-mov-historico tbody');
+          if (!data.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhuma movimentação encontrada.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = data.map(m => `
+            <tr>
+              <td><span class="badge ${m.tipo==='ENTRADA'?'badge-success':'badge-error'}">${m.tipo==='ENTRADA'?'Entrada':'Saída'}</span></td>
+              <td>${m.quantidade}</td>
+              <td class="text-muted">${m.quantidade_anterior||0} → ${m.quantidade_posterior||0}</td>
+              <td>${m.armazem_nome||''}</td>
+              <td>${m.responsavel||''}</td>
+              <td class="text-muted">${(m.observacao||'—').substring(0,40)}</td>
+              <td class="text-muted">${(m.criado_em||'').substring(0,10)}</td>
+            </tr>`).join('');
+        });
+    }
+
+    function carregarAtributos() {
+      const pid = document.getElementById('sel-produto-attr').value;
+      fetch('/api/consultas/atributos/' + pid)
+        .then(r => r.json())
+        .then(d => {
+          const div = document.getElementById('card-atributos-dynamic');
+          const tags = (d.tags||[]).map(t => `<span class="badge badge-brand-soft">${t}</span>`).join('');
+          const atrs = (d.atributos||[]).map(a => `<tr><td>${a.chave}</td><td>${a.valor}</td></tr>`).join('');
+          div.innerHTML = `
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">${d.nome}</h3>
+                <code class="code-tag">${d.sku}</code>
+              </div>
+              <div class="attr-layout">
+                <div>
+                  <div class="form-section-label">Tags <span class="tag-hint">(list&lt;text&gt;)</span></div>
+                  <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${tags}</div>
+                </div>
+                <div>
+                  <div class="form-section-label">Atributos <span class="tag-hint">(map expandido: ${d.total_atributos} pares)</span></div>
+                  <table class="table" style="margin-top:6px">
+                    <thead><tr><th>Chave</th><th>Valor</th></tr></thead>
+                    <tbody>${atrs||'<tr><td colspan="2" class="empty-state">Sem atributos.</td></tr>'}</tbody>
+                  </table>
+                </div>
+              </div>
+            </div>`;
+        });
+    }
+  </script>
+</body>
+</html>

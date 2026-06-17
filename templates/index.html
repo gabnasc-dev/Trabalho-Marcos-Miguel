@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Estoque Cassandra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="layout">
+
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">⬡</span>
+        <span class="brand-name">Estoque<span class="brand-accent">DB</span></span>
+      </div>
+      <nav class="sidebar-nav">
+        <span class="nav-section-label">Principal</span>
+        <a href="/" class="nav-item active">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="7" height="7" rx="1"/><rect x="11" y="2" width="7" height="7" rx="1"/><rect x="2" y="11" width="7" height="7" rx="1"/><rect x="11" y="11" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </a>
+        <a href="/produtos" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h14l-1.5 9H4.5L3 3z"/><circle cx="8" cy="17" r="1"/><circle cx="14" cy="17" r="1"/></svg>
+          Produtos
+        </a>
+        <a href="/movimentacoes" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10h12M13 6l4 4-4 4M7 6L3 10l4 4"/></svg>
+          Movimentações
+        </a>
+        <a href="/fornecedores" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3.314 2.686-6 6-6s6 2.686 6 6"/></svg>
+          Fornecedores
+        </a>
+        <span class="nav-section-label" style="margin-top:16px">Analytics</span>
+        <a href="/consultas" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 17l4-6 4 3 4-7"/><circle cx="17" cy="7" r="1"/></svg>
+          Consultas CQL
+        </a>
+      </nav>
+      <div class="sidebar-footer">Apache Cassandra 4.1</div>
+    </aside>
+
+    <main class="main">
+      <header class="page-header">
+        <div>
+          <h1 class="page-title">Dashboard</h1>
+          <p class="page-subtitle">Visão geral do estoque em tempo real</p>
+        </div>
+      </header>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      {% endwith %}
+
+      <div class="metric-grid">
+        <div class="metric-card">
+          <span class="metric-label">Total de Produtos</span>
+          <span class="metric-value">{{ kpis.total_produtos }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Itens em Estoque</span>
+          <span class="metric-value">{{ kpis.total_itens_estoque }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Itens Críticos / Zerados</span>
+          <span class="metric-value" style="color: var(--color-error-500)">{{ kpis.itens_criticos }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Valor Total em Estoque</span>
+          <span class="metric-value" style="font-size:1.5rem">R$ {{ "%.2f"|format(kpis.valor_total_estoque) }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Fornecedores</span>
+          <span class="metric-value">{{ kpis.total_fornecedores }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Armazéns Ativos</span>
+          <span class="metric-value">{{ kpis.total_armazens }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Entradas Registradas</span>
+          <span class="metric-value" style="color: var(--color-success-600)">{{ kpis.total_entradas }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Saídas Registradas</span>
+          <span class="metric-value" style="color: var(--color-error-500)">{{ kpis.total_saidas }}</span>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 28px">
+        <div class="card-header">
+          <h2 class="card-title">Movimentações Recentes</h2>
+          <a href="/movimentacoes" class="btn-link">Ver todas</a>
+        </div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th>SKU</th>
+              <th>Tipo</th>
+              <th>Qtd</th>
+              <th>Armazém</th>
+              <th>Responsável</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in movimentacoes_recentes %}
+            <tr>
+              <td>{{ m.produto_nome }}</td>
+              <td><code class="code-tag">{{ m.sku }}</code></td>
+              <td>
+                {% if m.tipo == "ENTRADA" %}
+                  <span class="badge badge-success">Entrada</span>
+                {% else %}
+                  <span class="badge badge-error">Saída</span>
+                {% endif %}
+              </td>
+              <td>{{ m.quantidade }}</td>
+              <td>{{ m.armazem_nome }}</td>
+              <td>{{ m.responsavel }}</td>
+              <td class="text-muted">{{ m.criado_em[:10] if m.criado_em else "" }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty-state">Nenhuma movimentação registrada.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

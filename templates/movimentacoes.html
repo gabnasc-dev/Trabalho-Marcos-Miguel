@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Movimentações — Estoque Cassandra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">⬡</span>
+        <span class="brand-name">Estoque<span class="brand-accent">DB</span></span>
+      </div>
+      <nav class="sidebar-nav">
+        <span class="nav-section-label">Principal</span>
+        <a href="/" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="7" height="7" rx="1"/><rect x="11" y="2" width="7" height="7" rx="1"/><rect x="2" y="11" width="7" height="7" rx="1"/><rect x="11" y="11" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </a>
+        <a href="/produtos" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h14l-1.5 9H4.5L3 3z"/><circle cx="8" cy="17" r="1"/><circle cx="14" cy="17" r="1"/></svg>
+          Produtos
+        </a>
+        <a href="/movimentacoes" class="nav-item active">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10h12M13 6l4 4-4 4M7 6L3 10l4 4"/></svg>
+          Movimentações
+        </a>
+        <a href="/fornecedores" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3.314 2.686-6 6-6s6 2.686 6 6"/></svg>
+          Fornecedores
+        </a>
+        <span class="nav-section-label" style="margin-top:16px">Analytics</span>
+        <a href="/consultas" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 17l4-6 4 3 4-7"/><circle cx="17" cy="7" r="1"/></svg>
+          Consultas CQL
+        </a>
+      </nav>
+      <div class="sidebar-footer">Apache Cassandra 4.1</div>
+    </aside>
+
+    <main class="main">
+      <header class="page-header">
+        <div>
+          <h1 class="page-title">Movimentações</h1>
+          <p class="page-subtitle">Entradas e saídas de estoque</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-nova-mov')">+ Nova Movimentação</button>
+      </header>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      {% endwith %}
+
+      <div class="filter-bar">
+        <button class="filter-btn active" onclick="filtrar('', this)">Todas</button>
+        <button class="filter-btn" onclick="filtrar('ENTRADA', this)">Entradas</button>
+        <button class="filter-btn" onclick="filtrar('SAIDA', this)">Saídas</button>
+      </div>
+
+      <div class="card">
+        <table class="table" id="tabela-mov">
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th>SKU</th>
+              <th>Tipo</th>
+              <th>Qtd</th>
+              <th>Ant. → Pos.</th>
+              <th>Armazém</th>
+              <th>Responsável</th>
+              <th>Observação</th>
+              <th>Data</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in movimentacoes %}
+            <tr data-tipo="{{ m.tipo }}">
+              <td><span class="cell-primary">{{ m.produto_nome }}</span></td>
+              <td><code class="code-tag">{{ m.sku }}</code></td>
+              <td>
+                {% if m.tipo == "ENTRADA" %}
+                  <span class="badge badge-success">Entrada</span>
+                {% else %}
+                  <span class="badge badge-error">Saída</span>
+                {% endif %}
+              </td>
+              <td>{{ m.quantidade }}</td>
+              <td class="text-muted">{{ m.quantidade_anterior }} → {{ m.quantidade_posterior }}</td>
+              <td>{{ m.armazem_nome }}</td>
+              <td>{{ m.responsavel }}</td>
+              <td class="text-muted">{{ m.observacao[:40] if m.observacao else "—" }}</td>
+              <td class="text-muted">{{ m.criado_em[:10] if m.criado_em else "" }}</td>
+              <td>
+                <form method="POST"
+                  action="/movimentacoes/{{ m.produto_id }}/{{ m.criado_em }}/{{ m.movimentacao_id }}/estornar"
+                  onsubmit="return confirm('Estornar esta movimentação?')">
+                  <button type="submit" class="btn btn-ghost btn-sm">Estornar</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="10" class="empty-state">Nenhuma movimentação encontrada.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal-nova-mov" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Nova Movimentação</h3>
+        <button class="modal-close" onclick="closeModal('modal-nova-mov')">&times;</button>
+      </div>
+      <form method="POST" action="/movimentacoes/nova">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Produto *</label>
+              <select name="produto_id" class="input" required>
+                <option value="">Selecione...</option>
+                {% for p in produtos %}
+                  <option value="{{ p.produto_id }}">{{ p.nome }} ({{ p.sku }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Armazém *</label>
+              <select name="armazem_id" class="input" required>
+                <option value="">Selecione...</option>
+                {% for a in armazens %}
+                  <option value="{{ a.armazem_id }}">{{ a.nome }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Tipo *</label>
+              <select name="tipo" class="input" required id="sel-tipo" onchange="toggleFornecedor()">
+                <option value="ENTRADA">Entrada</option>
+                <option value="SAIDA">Saída</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Quantidade *</label>
+              <input type="number" name="quantidade" class="input" min="1" value="1" required />
+            </div>
+          </div>
+          <div id="fornecedor-group" class="form-group">
+            <label class="form-label">Fornecedor (apenas entradas)</label>
+            <select name="fornecedor_id" class="input" onchange="this.form.fornecedor_nome.value=this.options[this.selectedIndex].text">
+              <option value="">Nenhum</option>
+              {% for f in fornecedores %}
+                <option value="{{ f.fornecedor_id }}">{{ f.nome }}</option>
+              {% endfor %}
+            </select>
+            <input type="hidden" name="fornecedor_nome" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Responsável</label>
+              <input type="text" name="responsavel" class="input" placeholder="Nome do responsável" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Observação</label>
+            <input type="text" name="observacao" class="input" placeholder="Detalhes da movimentação..." />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('modal-nova-mov')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function filtrar(tipo, btn) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('#tabela-mov tbody tr[data-tipo]').forEach(row => {
+        row.style.display = (!tipo || row.dataset.tipo === tipo) ? '' : 'none';
+      });
+    }
+
+    function toggleFornecedor() {
+      const tipo = document.getElementById('sel-tipo').value;
+      document.getElementById('fornecedor-group').style.display = tipo === 'ENTRADA' ? '' : 'none';
+    }
+    toggleFornecedor();
+
+    document.querySelectorAll('.modal-overlay').forEach(el =>
+      el.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; })
+    );
+  </script>
+</body>
+</html>

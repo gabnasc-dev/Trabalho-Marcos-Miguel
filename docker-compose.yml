@@ -1,0 +1,27 @@
+services:
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra_estoque
+    ports:
+      - "9042:9042"
+    environment:
+      CASSANDRA_CLUSTER_NAME: "EstoqueCluster"
+      CASSANDRA_DC: "datacenter1"
+      CASSANDRA_RACK: "rack1"
+      CASSANDRA_ENDPOINT_SNITCH: "GossipingPropertyFileSnitch"
+      HEAP_NEWSIZE: "512M"
+      MAX_HEAP_SIZE: "2G"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+      - ./scripts:/scripts
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe keyspaces' || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 15
+      start_period: 90s
+    restart: unless-stopped
+
+volumes:
+  cassandra_data:
+    driver: local

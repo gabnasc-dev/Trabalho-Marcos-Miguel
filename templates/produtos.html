@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Produtos — Estoque Cassandra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">⬡</span>
+        <span class="brand-name">Estoque<span class="brand-accent">DB</span></span>
+      </div>
+      <nav class="sidebar-nav">
+        <span class="nav-section-label">Principal</span>
+        <a href="/" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="7" height="7" rx="1"/><rect x="11" y="2" width="7" height="7" rx="1"/><rect x="2" y="11" width="7" height="7" rx="1"/><rect x="11" y="11" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </a>
+        <a href="/produtos" class="nav-item active">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h14l-1.5 9H4.5L3 3z"/><circle cx="8" cy="17" r="1"/><circle cx="14" cy="17" r="1"/></svg>
+          Produtos
+        </a>
+        <a href="/movimentacoes" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10h12M13 6l4 4-4 4M7 6L3 10l4 4"/></svg>
+          Movimentações
+        </a>
+        <a href="/fornecedores" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3.314 2.686-6 6-6s6 2.686 6 6"/></svg>
+          Fornecedores
+        </a>
+        <span class="nav-section-label" style="margin-top:16px">Analytics</span>
+        <a href="/consultas" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 17l4-6 4 3 4-7"/><circle cx="17" cy="7" r="1"/></svg>
+          Consultas CQL
+        </a>
+      </nav>
+      <div class="sidebar-footer">Apache Cassandra 4.1</div>
+    </aside>
+
+    <main class="main">
+      <header class="page-header">
+        <div>
+          <h1 class="page-title">Produtos</h1>
+          <p class="page-subtitle">{{ produtos|length }} produto(s) cadastrado(s)</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-novo-produto')">+ Novo Produto</button>
+      </header>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      {% endwith %}
+
+      <div class="card">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>SKU</th>
+              <th>Categoria</th>
+              <th>Fornecedor</th>
+              <th>Preço</th>
+              <th>Tags</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in produtos %}
+            <tr>
+              <td>
+                <span class="cell-primary">{{ p.nome }}</span>
+                {% if p.descricao %}
+                  <span class="cell-secondary">{{ p.descricao[:60] }}{% if p.descricao|length > 60 %}…{% endif %}</span>
+                {% endif %}
+              </td>
+              <td><code class="code-tag">{{ p.sku }}</code></td>
+              <td>{{ p.categoria_nome }}</td>
+              <td>{{ p.fornecedor_nome }}</td>
+              <td>R$ {{ "%.2f"|format(p.preco|float) }}</td>
+              <td>
+                {% for tag in (p.tags or [])[:3] %}
+                  <span class="badge badge-neutral">{{ tag }}</span>
+                {% endfor %}
+              </td>
+              <td>
+                <div class="action-group">
+                  <button class="btn btn-ghost btn-sm"
+                    onclick="openEditProduto('{{ p.produto_id }}','{{ p.nome }}','{{ p.descricao }}','{{ p.preco }}','{{ p.unidade }}','{{ p.categoria_nome }}','{{ p.fornecedor_nome }}','{{ (p.tags or [])|join(",") }}')">
+                    Editar
+                  </button>
+                  <form method="POST" action="/produtos/{{ p.produto_id }}/excluir"
+                        onsubmit="return confirm('Remover este produto?')">
+                    <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty-state">Nenhum produto cadastrado.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal-novo-produto" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Novo Produto</h3>
+        <button class="modal-close" onclick="closeModal('modal-novo-produto')">&times;</button>
+      </div>
+      <form method="POST" action="/produtos/novo">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Nome *</label>
+              <input type="text" name="nome" class="input" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">SKU</label>
+              <input type="text" name="sku" class="input" placeholder="EX-001" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descrição</label>
+            <input type="text" name="descricao" class="input" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Categoria</label>
+              <select name="categoria_id" class="input" onchange="this.form.categoria_nome.value=this.options[this.selectedIndex].text">
+                <option value="">Selecione...</option>
+                {% for c in categorias %}
+                  <option value="{{ c.categoria_id }}">{{ c.nome }}</option>
+                {% endfor %}
+              </select>
+              <input type="hidden" name="categoria_nome" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fornecedor</label>
+              <select name="fornecedor_id" class="input" onchange="this.form.fornecedor_nome.value=this.options[this.selectedIndex].text">
+                <option value="">Selecione...</option>
+                {% for f in fornecedores %}
+                  <option value="{{ f.fornecedor_id }}">{{ f.nome }}</option>
+                {% endfor %}
+              </select>
+              <input type="hidden" name="fornecedor_nome" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Preço (R$)</label>
+              <input type="number" name="preco" class="input" step="0.01" min="0" value="0.00" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Unidade</label>
+              <select name="unidade" class="input">
+                <option value="un">un (unidade)</option>
+                <option value="kg">kg (quilograma)</option>
+                <option value="cx">cx (caixa)</option>
+                <option value="cj">cj (conjunto)</option>
+                <option value="rl">rl (rolo)</option>
+                <option value="rs">rs (resma)</option>
+                <option value="pc">pc (pacote)</option>
+                <option value="par">par</option>
+                <option value="lt">lt (litro)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tags (separadas por vírgula)</label>
+            <input type="text" name="tags" class="input" placeholder="industrial, fragil, importado" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Atributos (chave / valor)</label>
+            <div id="atrib-list">
+              <div class="atrib-row">
+                <input type="text" name="atrib_chave" class="input" placeholder="Chave" />
+                <input type="text" name="atrib_valor" class="input" placeholder="Valor" />
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="addAtrib()">+ Adicionar atributo</button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('modal-novo-produto')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Criar Produto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-edit-produto" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Editar Produto</h3>
+        <button class="modal-close" onclick="closeModal('modal-edit-produto')">&times;</button>
+      </div>
+      <form method="POST" id="form-edit-produto" action="">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Nome</label>
+              <input type="text" name="nome" id="edit-nome" class="input" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Preço (R$)</label>
+              <input type="number" name="preco" id="edit-preco" class="input" step="0.01" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descrição</label>
+            <input type="text" name="descricao" id="edit-descricao" class="input" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Unidade</label>
+              <input type="text" name="unidade" id="edit-unidade" class="input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tags (vírgula)</label>
+              <input type="text" name="tags" id="edit-tags" class="input" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('modal-edit-produto')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function openEditProduto(id, nome, desc, preco, unidade, cat, forn, tags) {
+      document.getElementById('form-edit-produto').action = '/produtos/' + id + '/editar';
+      document.getElementById('edit-nome').value = nome;
+      document.getElementById('edit-descricao').value = desc;
+      document.getElementById('edit-preco').value = preco;
+      document.getElementById('edit-unidade').value = unidade;
+      document.getElementById('edit-tags').value = tags;
+      openModal('modal-edit-produto');
+    }
+
+    function addAtrib() {
+      const list = document.getElementById('atrib-list');
+      const row = document.createElement('div');
+      row.className = 'atrib-row';
+      row.innerHTML = '<input type="text" name="atrib_chave" class="input" placeholder="Chave" /><input type="text" name="atrib_valor" class="input" placeholder="Valor" />';
+      list.appendChild(row);
+    }
+
+    document.querySelectorAll('.modal-overlay').forEach(el =>
+      el.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; })
+    );
+  </script>
+</body>
+</html>
