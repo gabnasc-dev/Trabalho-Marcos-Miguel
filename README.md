@@ -10,7 +10,7 @@
 | Fernanda Rebelatto Miranda | 0900170399 |
 | Guilherme Guerra de Paulo | — |
 | João Vitor Ferreira da Silva | 000155066 |
-| Rodrigo Barreiros Moreira | — |
+| Rodrigo Barreiros Moreira | 0900062762 |
 
 ## Banco Escolhido
 
