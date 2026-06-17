@@ -7,7 +7,7 @@
 | Nome | RA |
 |------|----|
 | Gabriel do Nascimento Rodrigues | 000154979 |
-| Fernanda Rebelatto Miranda | — |
+| Fernanda Rebelatto Miranda | 0900170399 |
 | Guilherme Guerra de Paulo | — |
 | João Vitor Ferreira da Silva | — |
 | Rodrigo Barreiros Moreira | — |
