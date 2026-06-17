@@ -6,7 +6,7 @@
 
 | Nome | RA |
 |------|----|
-| Gabriel do Nascimento Rodrigues | — |
+| Gabriel do Nascimento Rodrigues | 000154979 |
 | Fernanda Rebelatto Miranda | — |
 | Guilherme Guerra de Paulo | — |
 | João Vitor Ferreira da Silva | — |
